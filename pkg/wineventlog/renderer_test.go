@@ -36,6 +36,8 @@ import (
 	"github.com/tianlin/go-windows-eventlog/pkg/winevent"
 )
 
+const testRendererLocale = 1033 // en-US for locale-sensitive assertions.
+
 func TestRenderer(t *testing.T) {
 
 	t.Run(filepath.Base(security4738File), func(t *testing.T) {
@@ -151,7 +153,7 @@ func TestRenderer(t *testing.T) {
 		log := openLog(t, security4738File)
 		defer log.Close()
 
-		r, err := NewRenderer(0, NilHandle)
+		r, err := NewRenderer(testRendererLocale, NilHandle)
 		if err != nil {
 			t.Fatal(err)
 		}

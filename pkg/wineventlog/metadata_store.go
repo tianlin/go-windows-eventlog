@@ -71,6 +71,10 @@ func NewPublisherMetadataStore(session EvtHandle, provider string, locale uint32
 	if err != nil {
 		return nil, err
 	}
+	return newPublisherMetadataStore(md)
+}
+
+func newPublisherMetadataStore(md *PublisherMetadata) (*PublisherMetadataStore, error) {
 	store := &PublisherMetadataStore{
 		Metadata:          md,
 		EventFingerprints: map[uint32]map[uint64]*EventMetadata{},
@@ -79,7 +83,7 @@ func NewPublisherMetadataStore(session EvtHandle, provider string, locale uint32
 
 	// Query the provider metadata to build an in-memory cache of the
 	// information to optimize event reading.
-	err = errors.Join(
+	err := errors.Join(
 		store.initKeywords(),
 		store.initOpcodes(),
 		store.initLevels(),
@@ -87,7 +91,7 @@ func NewPublisherMetadataStore(session EvtHandle, provider string, locale uint32
 		store.initEvents(),
 	)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, md.Close())
 	}
 
 	return store, nil

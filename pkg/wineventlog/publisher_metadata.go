@@ -56,7 +56,7 @@ func NewPublisherMetadata(session EvtHandle, name string, locale uint32) (*Publi
 		}
 	}
 
-	handle, err := _EvtOpenPublisherMetadata(session, publisherName, logFile, 0, 0)
+	handle, err := _EvtOpenPublisherMetadata(session, publisherName, logFile, locale, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed in EvtOpenPublisherMetadata: %w", err)
 	}

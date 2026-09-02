@@ -120,6 +120,22 @@ func TestConfigValidate(t *testing.T) {
 			WantErr: true,
 			Desc:    "batch size too large",
 		},
+		{
+			In: Config{
+				Name:      "Application",
+				BatchSize: 1024,
+			},
+			WantErr: false,
+			Desc:    "batch size at maximum",
+		},
+		{
+			In: Config{
+				Name:      "Application",
+				BatchSize: 1025,
+			},
+			WantErr: true,
+			Desc:    "batch size above maximum",
+		},
 	}
 
 	for _, tc := range tests {

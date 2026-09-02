@@ -25,6 +25,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewPublisherMetadataStoreClosesMetadataOnInitializationError(t *testing.T) {
+	handle, err := _EvtCreateRenderContext(0, nil, EvtRenderContextSystem)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	metadata := &PublisherMetadata{Handle: handle}
+	_, err = newPublisherMetadataStore(metadata)
+	assert.Error(t, err)
+
+	// A second close must fail when store initialization already released the
+	// metadata handle. Close it here as well so the test remains leak-free when
+	// the assertion fails.
+	assert.Error(t, handle.Close(), "metadata handle was not closed after store initialization failed")
+}
+
 func TestPublisherMetadataStore(t *testing.T) {
 	s, err := NewPublisherMetadataStore(
 		NilHandle,

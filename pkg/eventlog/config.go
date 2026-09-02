@@ -44,7 +44,7 @@ type Config struct {
 	CheckpointFile string `yaml:"checkpoint_file,omitempty" json:"checkpoint_file,omitempty"`
 
 	// BatchSize is the maximum number of events to read in a single batch.
-	// Default: 100
+	// Default: 100, maximum: 1024
 	BatchSize int `yaml:"batch_size,omitempty" json:"batch_size,omitempty"`
 
 	// IgnoreOlder ignores events older than this duration.
@@ -111,8 +111,8 @@ func (c *Config) Validate() error {
 		c.BatchSize = 100
 	}
 
-	if c.BatchSize > 1000 {
-		return fmt.Errorf("batch_size cannot exceed 1000, got %d", c.BatchSize)
+	if c.BatchSize > 1024 {
+		return fmt.Errorf("batch_size cannot exceed 1024, got %d", c.BatchSize)
 	}
 
 	// Validate XML query syntax if provided
