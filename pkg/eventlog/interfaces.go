@@ -28,6 +28,8 @@ type EventLog interface {
 	// Open the event log. state points to the last successfully read event
 	// in this event log. Read will resume from the next record. To start reading
 	// from the first event specify a zero-valued EventLogState.
+	// Real-time ETW requires zero state and starts with future events only;
+	// use CapabilityProvider to discover source-specific recovery semantics.
 	Open(state checkpoint.EventLogState) error
 
 	// Read records from the event log. Returns a slice of records or an error.

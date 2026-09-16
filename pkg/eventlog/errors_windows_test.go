@@ -21,6 +21,7 @@ package eventlog
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"testing"
 
@@ -35,6 +36,7 @@ func TestIsRecoverable(t *testing.T) {
 		isFile      bool
 		recoverable bool
 	}{
+		{name: "wrapped ETW native error", err: fmt.Errorf("ProcessTrace: %w", wineventlog.ERROR_INVALID_HANDLE), recoverable: true},
 		{
 			name:        "ERROR_INVALID_HANDLE",
 			err:         wineventlog.ERROR_INVALID_HANDLE,

@@ -12,6 +12,20 @@ go get github.com/tianlin/go-windows-eventlog
 
 **Requirements:** Go 1.23+, Windows OS
 
+## Real-time ETW channels
+
+Analytic/Debug channels with manifest metadata can now use the same
+`eventlog.New → Open → Read → Close` interface through the ETW backend on
+Windows amd64/arm64. The backend is selected from Windows channel metadata;
+ordinary channels, XML queries and `.evtx` files retain the WinEvt backend.
+
+See [the ETW integration guide](docs/etw.md) for API semantics and supported
+payload types, and [the ETW reader example](examples/etw-reader/README.md) for
+commands. ETW is real-time only: it does not provide native bookmarks, historical
+replay or recovery of events missed while stopped. Use the optional
+`CapabilityProvider` interface instead of assuming every reader supports
+`CheckpointProvider`.
+
 ## Usage
 
 ```go

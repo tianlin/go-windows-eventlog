@@ -28,6 +28,7 @@ import (
 // Record represents a single event from the Windows Event Log.
 type Record struct {
 	winevent.Event
+	ETW    *ETWData                 // Present only for real-time ETW events.
 	File   string                   // Source file when event is from a file.
 	XML    string                   // XML representation of the event.
 	Offset checkpoint.EventLogState // Position of the record within its source stream.
@@ -53,6 +54,10 @@ func (r Record) ToMap() winevent.MapStr {
 
 	m := winevent.MapStr{
 		"winlog": win,
+	}
+	if r.ETW != nil {
+		delete(win, "record_id")
+		m["etw"] = r.ETW.fields()
 	}
 
 	// ECS data

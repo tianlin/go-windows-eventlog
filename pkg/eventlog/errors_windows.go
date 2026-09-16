@@ -28,15 +28,13 @@ import (
 // IsRecoverable returns a boolean indicating whether the error represents
 // a condition where the Windows Event Log session can be recovered through a
 // reset and reopening of the handle (Reset, Open).
-//
-//nolint:errorlint // These are never wrapped.
 func IsRecoverable(err error, isFile bool) bool {
-	return err == wineventlog.ERROR_INVALID_HANDLE ||
-		err == wineventlog.RPC_S_SERVER_UNAVAILABLE ||
-		err == wineventlog.RPC_S_CALL_CANCELLED ||
-		err == wineventlog.ERROR_EVT_QUERY_RESULT_STALE ||
-		err == wineventlog.ERROR_INVALID_PARAMETER ||
-		err == wineventlog.ERROR_EVT_PUBLISHER_DISABLED ||
+	return errors.Is(err, wineventlog.ERROR_INVALID_HANDLE) ||
+		errors.Is(err, wineventlog.RPC_S_SERVER_UNAVAILABLE) ||
+		errors.Is(err, wineventlog.RPC_S_CALL_CANCELLED) ||
+		errors.Is(err, wineventlog.ERROR_EVT_QUERY_RESULT_STALE) ||
+		errors.Is(err, wineventlog.ERROR_INVALID_PARAMETER) ||
+		errors.Is(err, wineventlog.ERROR_EVT_PUBLISHER_DISABLED) ||
 		errors.Is(err, errRecordIDGap) ||
 		errors.Is(err, errRenderNoEvent) ||
 		(!isFile && errors.Is(err, wineventlog.ERROR_EVT_CHANNEL_NOT_FOUND))

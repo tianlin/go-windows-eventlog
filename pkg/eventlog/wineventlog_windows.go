@@ -118,6 +118,9 @@ func New(config Config) (EventLog, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
+	if reader, handled, err := routeETW(config); handled {
+		return reader, err
+	}
 
 	id := config.ID
 	if id == "" {
@@ -168,6 +171,10 @@ func New(config Config) (EventLog, error) {
 	}
 
 	return l, nil
+}
+
+func (l *winEventLog) Capabilities() Capabilities {
+	return Capabilities{Backend: "winevt", NativeBookmark: true}
 }
 
 func (l *winEventLog) isForwarded() bool {

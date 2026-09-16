@@ -35,6 +35,7 @@ Thumbs.db
 *.yml
 .winlogbeat.yml
 testdata/*.evtx
+!pkg/wineventlog/testdata/*.evtx
 
 # Build artifacts
 dist/
