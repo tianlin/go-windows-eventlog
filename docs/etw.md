@@ -71,6 +71,9 @@ and maximum 1024.
   waits for the consumer after successful cleanup, waking blocked reads. Queued
   records remain readable before EOF. A failed native cleanup retains ownership
   so Close can be retried; it does not promise the consumer has exited.
+- If Open fails and its rollback also fails, the reader retains a cleanup-only
+  source. Read cannot consume it and another Open is rejected until Reset/Close
+  successfully retries cleanup. No consumer goroutine is started in this state.
 - `Reset` performs cleanup, discards the remaining old queue and counts those
   records as `ResetDiscarded`. A successful cleanup may still report the old
   consumer's terminal error; the reader can subsequently be opened with zero
@@ -96,6 +99,10 @@ comes from EVENT_HEADER and RelatedActivityID from extended event data.
 - the TDH message template and any decode error.
 
 RecordID and Offset remain zero. `ToMap` omits `winlog.record_id` for ETW records.
+`Record.ETW` remains a struct; `ToMap` exposes it as a nested `winevent.MapStr`,
+so existing GetValue/Put/Delete/Flatten operations work on `etw.*`. Decoded
+properties retain their integer types, arrays and nested maps without a JSON
+round trip.
 Messages are not fabricated from templates: message insertion, enum/bitmap
 name rendering and XML synthesis are not implemented. Use `MessageTemplate`
 and typed `Properties` when a rendered message is unavailable.
@@ -152,7 +159,22 @@ non-default Locale and non-wait NoMoreEvents with `ErrETWUnsupported`.
 routed to WinEvt as described above. Windows/386 retains WinEvt support but
 returns ErrETWUnsupported for resolved ETW channels.
 
-Each reader owns one randomly named session. It does not install manifests,
+Each reader owns one session. Its versioned name contains a hash of the
+case-normalized executable path, the owner PID and process creation time, and a
+per-process reader counter. Before creating a session, the library enumerates
+sessions in the same executable namespace and stops only those whose original
+process has demonstrably exited (including PID reuse). Live owners and owners
+whose identity cannot be checked are left alone. Concurrent restarts may both
+attempt to stop an orphan; an already absent session is treated as cleaned up.
+A failed orphan STOP prevents creating another session on that attempt.
+
+Recovery requires the same executable path and sufficient query/stop rights.
+Moving the executable changes its namespace. Legacy GUID-only session names
+from earlier builds have no verifiable owner and are not automatically stopped;
+operators must identify and stop those sessions explicitly. This is resource
+reclamation, not recovery of events emitted while the reader was stopped.
+
+The library does not install manifests,
 change channel enable/retention policies or take over external sessions.
 Operating-system session limits and provider authorization still apply.
 Real-time privileges normally require an elevated shell or appropriate service/
@@ -165,6 +187,10 @@ channel metadata, exact filtering, lifecycle races/retries, partial decode
 results, resource limits and serialization. The elevated integration test emits
 numbered events to two fixture channels and verifies target events without
 mixing, duplication or loss. See the [example guide](../examples/etw-reader/README.md).
+The elevated orphan regression repeatedly kills a child process, verifies its
+session survives the crash, then verifies a new reader reclaims it while a
+second live child continues to own its session. Unit tests additionally cover
+PID reuse, unverifiable owners, and initialization rollback failures.
 
 The maintainer reported successful elevated WMI capture and native sequence
 tests for the original PoC. The formal integration adds the fixes and regression

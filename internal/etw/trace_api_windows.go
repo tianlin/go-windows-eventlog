@@ -18,6 +18,33 @@ type traceAPI interface {
 
 type windowsTraceAPI struct{}
 
+type startupTraceAPI interface {
+	traceAPI
+	start([]uint16) (uint64, windows.Errno)
+	open(*traceLogfile) (uint64, error)
+	enable(uint64, Provider) windows.Errno
+}
+
+func (windowsTraceAPI) start(name []uint16) (uint64, windows.Errno) {
+	var handle uint64
+	buf, p := properties(name)
+	code, _, _ := startTrace.Call(uintptr(unsafe.Pointer(&handle)), uintptr(unsafe.Pointer(&name[0])), uintptr(unsafe.Pointer(p)))
+	runtime.KeepAlive(buf)
+	runtime.KeepAlive(name)
+	return handle, windows.Errno(code)
+}
+func (windowsTraceAPI) open(logfile *traceLogfile) (uint64, error) {
+	h, _, err := openTrace.Call(uintptr(unsafe.Pointer(logfile)))
+	if h == ^uintptr(0) {
+		return 0, err
+	}
+	return uint64(h), nil
+}
+func (windowsTraceAPI) enable(h uint64, p Provider) windows.Errno {
+	code, _, _ := enableTrace.Call(uintptr(h), uintptr(unsafe.Pointer(&p.GUID)), 1, 0, 0, 0, 0, 0)
+	return windows.Errno(code)
+}
+
 func (windowsTraceAPI) control(h uint64, name []uint16, op uint32) (Stats, windows.Errno) {
 	buf, p := properties(name)
 	var instanceName *uint16

@@ -36,6 +36,7 @@ type etwEventLog struct {
 	filter                            *recordFilter
 	start                             func([]etw.Provider, func(etw.Event)) (traceSource, error)
 	run                               *etwRun
+	cleanupPending                    traceSource
 	resetDiscarded                    uint64
 	closed                            bool
 	opens                             uint64
@@ -61,7 +62,13 @@ func newETWEventLog(c Config, p []etw.Provider) (*etwEventLog, error) {
 	if c.ETWQueueSize == 0 {
 		c.ETWQueueSize = 1024
 	}
-	return &etwEventLog{config: c, providers: p, filter: f, start: func(p []etw.Provider, emit func(etw.Event)) (traceSource, error) { return etw.New(p, emit) }}, nil
+	return &etwEventLog{config: c, providers: p, filter: f, start: func(p []etw.Provider, emit func(etw.Event)) (traceSource, error) {
+		s, err := etw.New(p, emit)
+		if s == nil {
+			return nil, err
+		}
+		return s, err
+	}}, nil
 }
 
 func (l *etwEventLog) Name() string {
@@ -90,9 +97,13 @@ func (l *etwEventLog) Open(state checkpoint.EventLogState) error {
 	if l.run != nil {
 		return fmt.Errorf("ETW reader already open; Reset before Open")
 	}
+	if l.cleanupPending != nil {
+		return fmt.Errorf("ETW initialization cleanup pending; retry Reset or Close before Open")
+	}
 	q := make(chan Record, l.config.ETWQueueSize)
 	source, err := l.start(l.providers, func(e etw.Event) { l.accept(q, e) })
 	if err != nil {
+		l.cleanupPending = source
 		return err
 	}
 	run := &etwRun{source: source, queue: q, done: make(chan struct{})}
@@ -201,6 +212,13 @@ func (l *etwEventLog) shutdown(final bool) error {
 	if l.closed {
 		l.mu.Unlock()
 		return nil
+	}
+	if l.cleanupPending != nil {
+		if err := l.cleanupPending.Close(); err != nil {
+			l.mu.Unlock()
+			return err
+		}
+		l.cleanupPending = nil
 	}
 	run := l.run
 	if run == nil {

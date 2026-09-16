@@ -133,6 +133,7 @@ type Session struct {
 	consumerClosed   bool
 	stopped          bool
 	started          bool
+	initErr          error
 	last             Stats
 }
 
@@ -153,28 +154,30 @@ func properties(name []uint16) ([]byte, *traceProperties) {
 	return b, p
 }
 
+// New may return a non-nil session with an error if initialization rollback
+// failed. That session must only be closed (with retries), never run.
 func New(providers []Provider, emit func(Event)) (*Session, error) {
-	guid, err := windows.GenerateGUID()
+	name, err := ownedSessionName()
 	if err != nil {
 		return nil, err
 	}
-	name, _ := windows.UTF16FromString("go-windows-eventlog-" + guid.String())
-	s := &Session{api: windowsTraceAPI{}, name: name, providers: append([]Provider(nil), providers...), emit: emit, token: uintptr(nextID.Add(1))}
-	buf, p := properties(name)
-	status, _, _ := startTrace.Call(uintptr(unsafe.Pointer(&s.handle)), uintptr(unsafe.Pointer(&name[0])), uintptr(unsafe.Pointer(p)))
-	runtime.KeepAlive(buf)
+	return newSession(name, providers, emit, windowsTraceAPI{})
+}
+
+func newSession(name []uint16, providers []Provider, emit func(Event), api startupTraceAPI) (*Session, error) {
+	s := &Session{api: api, name: name, providers: append([]Provider(nil), providers...), emit: emit, token: uintptr(nextID.Add(1))}
+	handle, status := api.start(name)
 	if status != 0 {
 		return nil, fmt.Errorf("StartTraceW (requires ETW session privileges): %w", windows.Errno(status))
 	}
+	s.handle = handle
 	// Open the consumer before enabling providers so initialization does not
-	// discard early events. A GUID session name avoids stopping external sessions.
+	// discard early events. The owner-qualified name isolates concurrent readers.
 	s.logfile = traceLogfile{LoggerName: &s.name[0], Mode: 0x10000100, EventCallback: recordCallback, BufferCallback: bufferCallback, Context: s.token}
 	sessions.Store(s.token, s)
-	consumer, _, callErr := openTrace.Call(uintptr(unsafe.Pointer(&s.logfile)))
-	if consumer == ^uintptr(0) {
-		cleanupErr := s.Close()
-		sessions.Delete(s.token)
-		return nil, errors.Join(fmt.Errorf("OpenTraceW: %w", callErr), cleanupErr)
+	consumer, callErr := api.open(&s.logfile)
+	if callErr != nil {
+		return s.rollback(fmt.Errorf("OpenTraceW: %w", callErr))
 	}
 	s.consumer = uint64(consumer)
 	seen := map[windows.GUID]bool{}
@@ -185,18 +188,28 @@ func New(providers []Provider, emit func(Event)) (*Session, error) {
 		seen[provider.GUID] = true
 		// Level 0 enables all levels (including custom levels); MatchAnyKeyword=0
 		// enables all keywords. Exact filtering follows in the callback/reader.
-		status, _, _ = enableTrace.Call(uintptr(s.handle), uintptr(unsafe.Pointer(&provider.GUID)), 1, 0, 0, 0, 0, 0)
+		status = api.enable(s.handle, provider)
 		if status != 0 {
-			cleanupErr := s.Close()
-			sessions.Delete(s.token)
-			return nil, errors.Join(fmt.Errorf("EnableTraceEx2 %s: %w", provider.Name, windows.Errno(status)), cleanupErr)
+			return s.rollback(fmt.Errorf("EnableTraceEx2 %s: %w", provider.Name, status))
 		}
 	}
 	return s, nil
 }
 
+func (s *Session) rollback(err error) (*Session, error) {
+	s.initErr = err
+	if cleanupErr := s.Close(); cleanupErr != nil {
+		return s, errors.Join(err, cleanupErr)
+	}
+	return nil, err
+}
+
 func (s *Session) Run() error {
 	s.mu.Lock()
+	if s.initErr != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("ETW initialization failed; only Close is allowed: %w", s.initErr)
+	}
 	if s.started {
 		s.mu.Unlock()
 		return fmt.Errorf("ETW consumer already started")

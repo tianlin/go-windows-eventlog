@@ -1,6 +1,10 @@
 package eventlog
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/tianlin/go-windows-eventlog/pkg/winevent"
+)
 
 // ErrETWUnsupported identifies configuration or recovery semantics unavailable
 // from the real-time ETW backend.
@@ -28,6 +32,25 @@ type ETWData struct {
 	RawData         []byte         `json:"raw_data,omitempty"`
 	MessageTemplate string         `json:"message_template,omitempty"`
 	DecodeError     string         `json:"decode_error,omitempty"`
+}
+
+func (e *ETWData) fields() winevent.MapStr {
+	m := winevent.MapStr{"channel_id": e.ChannelID, "level": e.Level, "task": e.Task, "opcode": e.Opcode, "keywords": e.Keywords}
+	// TDH structures already are nested maps, and arrays contain typed values.
+	// Avoid JSON conversion, which would turn large integers into float64.
+	if len(e.Properties) != 0 {
+		m["properties"] = e.Properties
+	}
+	if len(e.RawData) != 0 {
+		m["raw_data"] = e.RawData
+	}
+	if e.MessageTemplate != "" {
+		m["message_template"] = e.MessageTemplate
+	}
+	if e.DecodeError != "" {
+		m["decode_error"] = e.DecodeError
+	}
+	return m
 }
 
 // ETWStats is cumulative for a reader, except QueueLength. Source counters are

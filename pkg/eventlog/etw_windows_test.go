@@ -5,7 +5,9 @@ package eventlog
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -52,6 +54,76 @@ func TestETWDescriptorSurvivesJSON(t *testing.T) {
 		if raw[k] != want {
 			t.Errorf("%s: got %v want %v", k, raw[k], want)
 		}
+	}
+}
+
+func TestETWMapSupportsFieldOperations(t *testing.T) {
+	props := map[string]any{"Sequence": uint32(42), "Values": []any{uint16(10), uint16(20)}, "Struct": map[string]any{"Count": uint64(1 << 60)}}
+	r := Record{ETW: &ETWData{Properties: props, RawData: []byte{1, 2}, Keywords: uint64(1 << 63)}}
+	m := r.ToMap()
+	for key, want := range map[string]any{"etw.properties.Sequence": uint32(42), "etw.properties.Values": props["Values"], "etw.properties.Struct.Count": uint64(1 << 60), "etw.keywords": uint64(1 << 63)} {
+		got, err := m.GetValue(key)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: got %#v, %v; want %#v", key, got, err, want)
+		}
+	}
+	if got := m.Flatten()["etw.properties.Struct.Count"]; got != uint64(1<<60) {
+		t.Errorf("flattened value: %#v", got)
+	}
+	if err := m.Delete("etw.raw_data"); err != nil {
+		t.Error(err)
+	}
+	if _, err := m.GetValue("etw.raw_data"); err == nil {
+		t.Error("raw_data still present")
+	}
+	if _, err := m.Put("etw.channel_id", uint8(17)); err != nil {
+		t.Error(err)
+	}
+	if got, err := m.GetValue("etw.channel_id"); err != nil || got != uint8(17) {
+		t.Fatalf("Put result: %#v, %v", got, err)
+	}
+}
+
+func TestETWFailedOpenRetainsCleanup(t *testing.T) {
+	for _, final := range []bool{false, true} {
+		t.Run(fmt.Sprint("final=", final), func(t *testing.T) {
+			l, f := testETWReader(t, Config{})
+			initErr := errors.New("initialization failed")
+			f.closeError = errors.New("stop failed")
+			starts := 0
+			l.start = func([]etw.Provider, func(etw.Event)) (traceSource, error) { starts++; return f, initErr }
+			if err := l.Open(checkpoint.EventLogState{}); !errors.Is(err, initErr) {
+				t.Fatal(err)
+			}
+			if l.run != nil {
+				t.Fatal("failed initialization became readable")
+			}
+			if _, err := l.Read(); err == nil {
+				t.Fatal("failed input readable")
+			}
+			if err := l.Open(checkpoint.EventLogState{}); err == nil || starts != 1 {
+				t.Fatal("created another session before cleanup")
+			}
+			cleanup := l.Reset
+			if final {
+				cleanup = l.Close
+			}
+			if err := cleanup(); !errors.Is(err, f.closeError) {
+				t.Fatalf("cleanup error: %v", err)
+			}
+			if err := cleanup(); err != nil {
+				t.Fatal(err)
+			}
+			if f.closeCalls != 2 {
+				t.Fatalf("cleanup calls: %d", f.closeCalls)
+			}
+			if !final {
+				l.start = func([]etw.Provider, func(etw.Event)) (traceSource, error) { return nil, initErr }
+				if err := l.Open(checkpoint.EventLogState{}); !errors.Is(err, initErr) {
+					t.Fatal(err)
+				}
+			}
+		})
 	}
 }
 

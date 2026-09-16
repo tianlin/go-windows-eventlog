@@ -75,3 +75,55 @@ func TestSessionCloseBeforeRunReleasesContext(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+type failingStartupAPI struct {
+	fakeTraceAPI
+	openError   error
+	enableError windows.Errno
+}
+
+func (a *failingStartupAPI) start([]uint16) (uint64, windows.Errno) { return 1, 0 }
+func (a *failingStartupAPI) open(*traceLogfile) (uint64, error) {
+	if a.openError != nil {
+		return 0, a.openError
+	}
+	return 2, nil
+}
+func (a *failingStartupAPI) enable(uint64, Provider) windows.Errno { return a.enableError }
+
+func TestInitializationCleanupCanRetry(t *testing.T) {
+	for _, failOpen := range []bool{true, false} {
+		api := &failingStartupAPI{fakeTraceAPI: fakeTraceAPI{stopError: windows.ERROR_BUSY}}
+		if failOpen {
+			api.openError = windows.ERROR_ACCESS_DENIED
+		} else {
+			api.enableError = windows.ERROR_ACCESS_DENIED
+		}
+		name, _ := windows.UTF16FromString("initialization-test")
+		s, err := newSession(name, []Provider{{Name: "test"}}, func(Event) {}, api)
+		if !errors.Is(err, windows.ERROR_ACCESS_DENIED) || !errors.Is(err, windows.ERROR_BUSY) {
+			t.Fatalf("lost init/cleanup errors: %v", err)
+		}
+		if s == nil {
+			t.Fatal("lost session while STOP still pending")
+		}
+		if err := s.Run(); err == nil {
+			t.Fatal("ran failed initialization")
+		}
+		api.stopError = 0
+		if err := s.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if api.stops != 2 {
+			t.Fatalf("STOP calls: %d", api.stops)
+		}
+		if _, ok := sessions.Load(s.token); ok {
+			t.Fatal("retained callback after cleanup")
+		}
+		// A successful rollback does not require callers to retain a session.
+		s, err = newSession(name, []Provider{{Name: "test"}}, func(Event) {}, api)
+		if s != nil || !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+			t.Fatalf("successful rollback: %v, %v", s, err)
+		}
+	}
+}

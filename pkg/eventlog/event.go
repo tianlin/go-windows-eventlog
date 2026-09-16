@@ -57,7 +57,7 @@ func (r Record) ToMap() winevent.MapStr {
 	}
 	if r.ETW != nil {
 		delete(win, "record_id")
-		m["etw"] = r.ETW
+		m["etw"] = r.ETW.fields()
 	}
 
 	// ECS data

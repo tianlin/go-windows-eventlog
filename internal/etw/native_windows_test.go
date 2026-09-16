@@ -64,7 +64,7 @@ func TestTDHManifestDecode(t *testing.T) {
 	runtime.KeepAlive(payload)
 }
 
-// This test creates only its own randomly named session and registers an
+// This test creates only its own owner-qualified session and registers an
 // in-process fixture provider. TdhLoadManifest is process-local; no system
 // channel is installed, enabled, disabled or removed.
 func TestNativeRealtimeSequence(t *testing.T) {
@@ -74,6 +74,13 @@ func TestNativeRealtimeSequence(t *testing.T) {
 	guid := loadTestManifest(t)
 	events := make(chan Event, 32)
 	s, err := New([]Provider{{GUID: guid, Channel: 16, Name: "PoC"}}, func(e Event) { events <- e })
+	if s != nil {
+		t.Cleanup(func() {
+			if err := s.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +158,13 @@ func TestNativeRealtimeSequence(t *testing.T) {
 func TestNativePermissionOrCleanClose(t *testing.T) {
 	guid, _ := windows.GenerateGUID()
 	s, err := New([]Provider{{GUID: guid, Channel: 16}}, func(Event) {})
+	if s != nil {
+		t.Cleanup(func() {
+			if err := s.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+	}
 	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
 		t.Log("non-elevated session correctly reports access denied")
 		return

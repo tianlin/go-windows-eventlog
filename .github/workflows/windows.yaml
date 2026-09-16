@@ -35,16 +35,25 @@ jobs:
         run: go vet ./...
       - name: Unit and native ETW integration tests with race detector
         run: go test -race -count=1 -timeout=5m ./...
-      - name: Build all examples
+
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.23.x', 'stable']
+        arch: ['amd64', 'arm64', '386']
+    env:
+      CGO_ENABLED: '0'
+      GOARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Build library and all examples
         run: go build ./...
-      - name: Cross-compile Windows architectures
-        shell: pwsh
-        env:
-          CGO_ENABLED: '0'
-        run: |
-          $env:GOARCH = 'arm64'
-          go build ./...
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $env:GOARCH = '386'
-          go build ./...
-          exit $LASTEXITCODE
