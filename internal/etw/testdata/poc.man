@@ -7,6 +7,9 @@
           <channel name="GoWindowsEventlog-PoC/Trace" chid="Trace" value="16" type="Analytic" enabled="false"/>
           <channel name="GoWindowsEventlog-PoC/Other" chid="Other" value="17" type="Debug" enabled="false"/>
         </channels>
+        <tasks>
+          <task name="FixtureTask" value="1"/>
+        </tasks>
         <templates>
           <template tid="Payload">
             <data name="Sequence" inType="win:UInt32"/>
@@ -16,8 +19,8 @@
           </template>
         </templates>
         <events>
-          <event value="1" version="0" channel="Trace" level="win:Verbose" template="Payload"/>
-          <event value="2" version="0" channel="Other" level="win:Verbose" template="Payload"/>
+          <event value="1" version="0" channel="Trace" level="win:Verbose" task="FixtureTask" template="Payload"/>
+          <event value="2" version="0" channel="Other" level="win:Verbose" task="FixtureTask" template="Payload"/>
         </events>
       </provider>
     </events>

@@ -20,8 +20,13 @@ type windowsTraceAPI struct{}
 
 func (windowsTraceAPI) control(h uint64, name []uint16, op uint32) (Stats, windows.Errno) {
 	buf, p := properties(name)
-	code, _, _ := controlTrace.Call(uintptr(h), 0, uintptr(unsafe.Pointer(p)), uintptr(op))
+	var instanceName *uint16
+	if len(name) != 0 {
+		instanceName = &name[0]
+	}
+	code, _, _ := controlTrace.Call(uintptr(h), uintptr(unsafe.Pointer(instanceName)), uintptr(unsafe.Pointer(p)), uintptr(op))
 	runtime.KeepAlive(buf)
+	runtime.KeepAlive(name)
 	return Stats{EventsLost: uint64(p.EventsLost), RealtimeBuffersLost: uint64(p.RealtimeBuffersLost)}, windows.Errno(code)
 }
 func (windowsTraceAPI) close(h uint64) windows.Errno {

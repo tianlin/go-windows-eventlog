@@ -17,6 +17,30 @@ func TestTDHEmptyMetadata(t *testing.T) {
 	}
 }
 
+func TestTDHMetadataNames(t *testing.T) {
+	b := make([]byte, 112)
+	for _, field := range []struct {
+		offset int
+		value  string
+	}{
+		{64, "keyword"}, {68, "task"}, {72, "opcode"},
+		{76, "event %1"}, {80, "provider"},
+	} {
+		binary.LittleEndian.PutUint32(b[field.offset:], uint32(len(b)))
+		for _, c := range field.value {
+			b = append(b, byte(c), 0)
+		}
+		b = append(b, 0, 0)
+	}
+	var e Event
+	if err := decodeMetadata(&eventRecord{}, &e, b); err != nil {
+		t.Fatal(err)
+	}
+	if e.TaskName != "task" || e.OpcodeName != "opcode" || e.MessageTemplate != "event %1" {
+		t.Fatalf("incorrect metadata: task=%q opcode=%q message=%q", e.TaskName, e.OpcodeName, e.MessageTemplate)
+	}
+}
+
 func TestTDHGlobalDecodeBudget(t *testing.T) {
 	b := decodeBudget{values: 10, bytes: 10}
 	if err := b.takeValues(6); err != nil {

@@ -41,12 +41,15 @@ func fixturePayload(seq uint32) []byte {
 func TestTDHManifestDecode(t *testing.T) {
 	guid := loadTestManifest(t)
 	payload := fixturePayload(42)
-	r := eventRecord{Header: eventHeader{Size: 80, Provider: guid, Descriptor: descriptor{ID: 1, Channel: 16, Level: 5}}, UserDataLength: uint16(len(payload)), UserData: unsafe.Pointer(&payload[0])}
+	r := eventRecord{Header: eventHeader{Size: 80, Provider: guid, Descriptor: descriptor{ID: 1, Channel: 16, Level: 5, Task: 1}}, UserDataLength: uint16(len(payload)), UserData: unsafe.Pointer(&payload[0])}
 	e := Event{RawData: append([]byte(nil), payload...)}
 	if err := decodeEvent(&r, &e); err != nil {
 		t.Fatal(err)
 	}
 	want := map[string]any{"Sequence": uint32(42), "Text": "hi", "Count": uint16(2), "Values": []any{uint32(10), uint32(20)}}
+	if e.TaskName != "FixtureTask" {
+		t.Fatalf("decoded task = %q, want FixtureTask", e.TaskName)
+	}
 	if !reflect.DeepEqual(e.Properties, want) {
 		t.Fatalf("got %#v want %#v", e.Properties, want)
 	}
@@ -104,7 +107,7 @@ func TestNativeRealtimeSequence(t *testing.T) {
 		b := fixturePayload(seq)
 		data := dataDescriptor{Ptr: uint64(uintptr(unsafe.Pointer(&b[0]))), Size: uint32(len(b))}
 		for _, channel := range []uint8{16, 17} {
-			d := descriptor{ID: uint16(channel - 15), Channel: channel, Level: 5}
+			d := descriptor{ID: uint16(channel - 15), Channel: channel, Level: 5, Task: 1}
 			code, _, _ = advapi.NewProc("EventWrite").Call(uintptr(provider), uintptr(unsafe.Pointer(&d)), 1, uintptr(unsafe.Pointer(&data)))
 			if code != 0 {
 				t.Fatal(windows.Errno(code))
@@ -181,6 +184,23 @@ func TestWindowsABI(t *testing.T) {
 		if pair[0] != pair[1] {
 			t.Errorf("%s: got %d want %d", name, pair[0], pair[1])
 		}
+	}
+}
+
+func TestNativeControlByName(t *testing.T) {
+	guid, err := windows.GenerateGUID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, err := windows.UTF16FromString("go-eventlog-absent-" + guid.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Query a unique nonexistent session: a supplied name reaches session lookup,
+	// while a zero handle and NULL name are rejected as invalid parameters.
+	_, code := (windowsTraceAPI{}).control(0, name, 0)
+	if code != windows.ERROR_WMI_INSTANCE_NOT_FOUND {
+		t.Fatalf("named query: got %v, want ERROR_WMI_INSTANCE_NOT_FOUND", code)
 	}
 }
 

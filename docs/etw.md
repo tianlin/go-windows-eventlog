@@ -146,8 +146,9 @@ subsequent sessions; cumulative counts must not be interpreted as complete.
 ## Unsupported semantics
 
 The ETW constructor rejects IncludeXML, CheckpointFile, explicit Forwarded,
-non-default Locale, non-wait NoMoreEvents and nonzero recovery state with
-`ErrETWUnsupported` (`errors.Is` is supported). XML Query configurations are
+non-default Locale and non-wait NoMoreEvents with `ErrETWUnsupported`.
+`Open` separately rejects nonzero `EventLogState` with `ErrETWUnsupported`
+(`errors.Is` is supported). XML Query configurations are
 routed to WinEvt as described above. Windows/386 retains WinEvt support but
 returns ErrETWUnsupported for resolved ETW channels.
 

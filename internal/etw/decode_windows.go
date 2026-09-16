@@ -151,13 +151,13 @@ func decodeMetadata(r *eventRecord, e *Event, b []byte) error {
 		return s, nil
 	}
 	var err error
-	if e.TaskName, err = getString(u32(72)); err != nil {
+	if e.TaskName, err = getString(u32(68)); err != nil {
 		return err
 	}
-	if e.OpcodeName, err = getString(u32(76)); err != nil {
+	if e.OpcodeName, err = getString(u32(72)); err != nil {
 		return err
 	}
-	if e.MessageTemplate, err = getString(u32(80)); err != nil {
+	if e.MessageTemplate, err = getString(u32(76)); err != nil {
 		return err
 	}
 	var props []propertyInfo
