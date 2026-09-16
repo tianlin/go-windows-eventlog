@@ -22,6 +22,7 @@ package eventlog
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -34,6 +35,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc/eventlog"
 
@@ -342,18 +344,27 @@ func createLog(t testing.TB, messageFiles ...string) (log *eventlog.Log, tearDow
 		wineventlog.EvtClearLog(wineventlog.NilHandle, name, "") //nolint:errcheck // This is just a resource release.
 	}
 
-	log, err = eventlog.Open(source)
+	// The service may not have finished initializing the newly registered log.
+	// Retry only access denied, with a deadline so persistent failures still fail.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		log, err = eventlog.Open(source)
+		if !errors.Is(err, windows.ERROR_ACCESS_DENIED) || !time.Now().Before(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil {
-		removeSource(name, source)         //nolint:errcheck // This is just a resource release.
-		removeProvider(name)               //nolint:errcheck // This is just a resource release.
+		removeSource(name, source) //nolint:errcheck // This is just a resource release.
+		removeProvider(name)       //nolint:errcheck // This is just a resource release.
 		t.Fatal(err)
 	}
 
 	tearDown = func() {
-		log.Close()                                             //nolint:errcheck // This is just a resource release.
+		log.Close()                                              //nolint:errcheck // This is just a resource release.
 		wineventlog.EvtClearLog(wineventlog.NilHandle, name, "") //nolint:errcheck // This is just a resource release.
-		removeSource(name, source)                              //nolint:errcheck // This is just a resource release.
-		removeProvider(name)                                    //nolint:errcheck // This is just a resource release.
+		removeSource(name, source)                               //nolint:errcheck // This is just a resource release.
+		removeProvider(name)                                     //nolint:errcheck // This is just a resource release.
 	}
 
 	return log, tearDown

@@ -21,6 +21,7 @@ package wineventlog
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -60,7 +61,16 @@ func createLog(t testing.TB) (log *eventlog.Log, tearDown func()) {
 		EvtClearLog(NilHandle, name, "")
 	}
 
-	log, err = eventlog.Open(source)
+	// Wait for the Event Log service to initialize the newly registered log.
+	// A persistent access error remains a test failure after the deadline.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		log, err = eventlog.Open(source)
+		if !errors.Is(err, windows.ERROR_ACCESS_DENIED) || !time.Now().Before(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil {
 		removeSource(name, source)
 		removeProvider(name)
