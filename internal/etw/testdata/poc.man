@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<instrumentationManifest xmlns="http://schemas.microsoft.com/win/2004/08/events">
+  <instrumentation>
+    <events>
+      <provider name="GoWindowsEventlog-PoC" guid="{25DC572A-3502-43E3-AEC1-32C05E130C81}" symbol="PocProvider" resourceFileName="poc.dll" messageFileName="poc.dll">
+        <channels>
+          <channel name="GoWindowsEventlog-PoC/Trace" chid="Trace" value="16" type="Analytic" enabled="false"/>
+          <channel name="GoWindowsEventlog-PoC/Other" chid="Other" value="17" type="Debug" enabled="false"/>
+        </channels>
+        <templates>
+          <template tid="Payload">
+            <data name="Sequence" inType="win:UInt32"/>
+            <data name="Text" inType="win:UnicodeString"/>
+            <data name="Count" inType="win:UInt16"/>
+            <data name="Values" inType="win:UInt32" count="Count"/>
+          </template>
+        </templates>
+        <events>
+          <event value="1" version="0" channel="Trace" level="win:Verbose" template="Payload"/>
+          <event value="2" version="0" channel="Other" level="win:Verbose" template="Payload"/>
+        </events>
+      </provider>
+    </events>
+  </instrumentation>
+</instrumentationManifest>

@@ -25,6 +25,9 @@ import (
 
 // Config is the configuration for reading Windows Event Logs.
 type Config struct {
+	// ETWQueueSize bounds the real-time ETW queue (default 1024).
+	// Full queues drop new events and increment ETWStats.QueueDropped.
+	ETWQueueSize int `yaml:"etw_queue_size,omitempty" json:"etw_queue_size,omitempty"`
 	// Name is the name of the event log or the path to an .evtx file.
 	// For channel-based reading: "Application", "Security", "System", etc.
 	// For file-based reading: path to .evtx file
@@ -102,6 +105,9 @@ func (c Config) recordQuery() query {
 
 // Validate validates the configuration and sets defaults.
 func (c *Config) Validate() error {
+	if c.ETWQueueSize < 0 || c.ETWQueueSize > 1048576 {
+		return fmt.Errorf("etw_queue_size must be between 0 and 1048576")
+	}
 	if c.Name == "" {
 		return fmt.Errorf("event log name cannot be empty")
 	}
